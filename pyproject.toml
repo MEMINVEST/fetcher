@@ -1,0 +1,16 @@
+[project]
+name = "personal-invest"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "black>=25.12.0",
+    "duckdb>=1.4.3",
+    "financedatabase>=2.3.1",
+    "financetoolkit>=2.0.6",
+    "polars>=1.37.0",
+    "pyarrow>=22.0.0",
+    "pyyaml>=6.0.3",
+    "ruff>=0.14.11",
+]
