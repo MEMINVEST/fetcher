@@ -61,7 +61,7 @@ class run_daily:
     def _run_one(self, tick, max_retries=3):
         for attempt in range(max_retries + 1):
             try:
-                dd = daily.daily_data(ticker=tick)
+                dd = daily.daily_data(ticker=tick, bronze_path = f"{root}/bronze")
                 dd.store_daily()
                 return
             except creq.exceptions.Timeout: 
