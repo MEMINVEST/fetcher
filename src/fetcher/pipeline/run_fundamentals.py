@@ -16,6 +16,7 @@ import os
 
 class run_fundamentals: 
     def __init__(self, root = ".dev/data"): 
+        self.root = root
         blacklist_dir = Path(f"{root}/blacklist")
         blacklisted = set()
 
@@ -62,7 +63,7 @@ class run_fundamentals:
     def _run_one(self, tick, max_retries = 3):
        for attempt in range(max_retries + 1):
            try:
-               f = fundamentals.fundamentals(ticker=tick)
+               f = fundamentals.fundamentals(ticker=tick, bronze_path= f"{self.root}/bronze")
                f.write()
                return
            except creq.exceptions.Timeout: 
