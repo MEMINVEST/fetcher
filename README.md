@@ -2,7 +2,7 @@ To test the library simply install it:
 
 
 ```bash
-python -m pip git+https://github.com/MEMINVEST/fetcher/
+python -m pip install git+https://github.com/MEMINVEST/fetcher/
 ```
 
 Then run set root wherever you want to have the data and run
@@ -27,3 +27,4 @@ Then run set root wherever you want to have the data and run
   from fetcher.pipeline.run_daily import run_daily
   run_daily(root).run()
 ```
+
