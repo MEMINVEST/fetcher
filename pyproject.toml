@@ -1,5 +1,5 @@
 [project]
-name = "personal-invest"
+name = "fetcher"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -9,8 +9,23 @@ dependencies = [
     "duckdb>=1.4.3",
     "financedatabase>=2.3.1",
     "financetoolkit>=2.0.6",
+    "pip>=25.3",
     "polars>=1.37.0",
     "pyarrow>=22.0.0",
     "pyyaml>=6.0.3",
     "ruff>=0.14.11",
 ]
+
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["fetcher*"]
+
+
+

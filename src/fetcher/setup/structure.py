@@ -1,6 +1,4 @@
 from pathlib import Path
-import os
-
 
 def create_bronze(path=".dev/data/bronze"):
     path = Path(path)
@@ -19,11 +17,7 @@ def create_bronze(path=".dev/data/bronze"):
         for s in subdirs:
             (path / s).mkdir(parents=True, exist_ok=True)
 
-
-create_bronze()
-
-
-def clean_bronze(root=".dev/data/bronze"):
+def clean_dir(root=".dev/data/bronze"):
     root_path = Path(root)
     if not root_path.exists():
         return
@@ -31,31 +25,19 @@ def clean_bronze(root=".dev/data/bronze"):
         if path.is_file() or path.is_symlink():
             path.unlink()
 
-
-def create_silver(path=".dev/data/silver"):
+def create_dir(path): 
     path = Path(path)
     if path.exists() and path.is_dir():
         print("Directory exists")
     else:
         path.mkdir()
 
+def create_data(root = ".dev/data"):
+    create_bronze(path = f"{root}/bronze")
+    create_dir(path = f"{root}/silver")
+    create_dir(path = f"{root}/gold")
+    create_dir(path = f"{root}/blacklist")
+    create_dir(path = f"{root}/silent_fails")
+    create_dir(path = f"{root}/logs")
+    create_dir(path = f"{root}/tickers")
 
-def clean_silver(root=".dev/data/silver"):
-    clean_bronze(root=root)
-
-
-create_silver()
-clean_silver()
-
-
-def create_gold(path=".dev/data/gold"):
-    path = Path(path)
-    create_silver(path=path)
-
-
-def clean_gold(root=".dev/data/gold"):
-    clean_bronze(root=root)
-
-
-create_gold()
-clean_gold()
