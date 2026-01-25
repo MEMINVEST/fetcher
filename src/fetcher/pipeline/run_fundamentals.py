@@ -34,7 +34,7 @@ class run_fundamentals:
 
         tickers_all = tickers.get_column("symbol").to_list()
         tickers_str = [t for t in tickers_all if t not in blacklisted]
-        self.tickers = tickers_str[0:100]
+        self.tickers = tickers_str
 
         self.ts = str(dt.datetime.now()).replace(" ", "_").replace(":", "").replace(".", "")
         self.blacklist_location = f"{blacklist_dir}/blacklist_{self.ts}.txt"
