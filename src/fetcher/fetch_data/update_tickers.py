@@ -19,6 +19,7 @@ def update(root = ".dev/data", exchanges = ["MU", "DE", "HA"]):
     
     # write tickers to parquet
     ts = str(dt.datetime.now()).replace(" ", "_").replace(":", "")
-    equities.select("symbol", "name").with_columns(
+    equities.with_columns(
         pl.lit(dt.datetime.now()).alias("timestamp")
     ).write_parquet(f"{root}/tickers/ticker_{ts}.parquet")
+
