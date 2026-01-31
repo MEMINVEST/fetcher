@@ -2,6 +2,7 @@ import subprocess
 
 UV_PATH = "uv"
 
+
 def set_uv_path(path: str):
     global UV_PATH
     UV_PATH = path

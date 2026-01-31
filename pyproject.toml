@@ -32,5 +32,9 @@ package-dir = {"" = "src"}
 where = ["src"]
 include = ["fetcher*"]
 
+[tool.black]
+target-version = ["py313"]
+
+
 
 
