@@ -15,7 +15,7 @@ import yfinance
 import os
 
 class run_fundamentals: 
-    def __init__(self, root = ".dev/data"): 
+    def __init__(self, root = ".dev/data", test = False, n_test = 1000): 
         self.root = root
         blacklist_dir = Path(f"{root}/blacklist")
         blacklisted = set()
@@ -36,6 +36,8 @@ class run_fundamentals:
         tickers_all = tickers.get_column("symbol").to_list()
         tickers_str = [t for t in tickers_all if t not in blacklisted]
         self.tickers = tickers_str
+        if test: 
+             self.tickers = tickers_str[0:n_test]
 
         self.ts = str(dt.datetime.now()).replace(" ", "_").replace(":", "").replace(".", "")
         self.blacklist_location = f"{blacklist_dir}/blacklist_{self.ts}.txt"
