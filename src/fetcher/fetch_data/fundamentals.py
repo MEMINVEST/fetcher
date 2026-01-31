@@ -7,6 +7,7 @@ import yfinance.data as yfdata
 import requests
 import curl_cffi.requests as creq
 import time
+from datetime import timezone, datetime
 from functools import cached_property
 
 yf.config.debug.hide_exceptions = False
@@ -123,6 +124,18 @@ class fundamentals:
             "currency": pl.Utf8,
             "exchange": pl.Utf8,
             "sharesOutstanding": pl.Int64,
+            "floatShares": pl.Int64,
+            "sharesShort": pl.Int64,
+            "fullTimeEmployees": pl.Int64,
+            "auditRisk": pl.Int64,
+            "boardRisk": pl.Int64,
+            "compensationRisk": pl.Int64,
+            "shareHolderRightsRisk": pl.Int64,
+            "overallRisk": pl.Int64,
+            "dateShortInterest": pl.Date,
+            "lastFiscalYearEnd": pl.Date,
+            "nextFiscalYearEnd": pl.Date,
+            "mostRecentQuarter": pl.Date,
         }
 
         if obj is None: 
@@ -137,6 +150,10 @@ class fundamentals:
 
         metarows["ticker"] = ticker
         metarows["timestamp"] = ts
+
+        for k in ("dateShortInterest", "lastFiscalYearEnd", "nextFiscalYearEnd", "mostRecentQuarter"):
+            v = metarows.get(k)
+            metarows[k] = None if v is None else datetime.fromtimestamp(int(v), tz=timezone.utc).date()
 
         return pl.DataFrame(metarows, schema=schema)
 
