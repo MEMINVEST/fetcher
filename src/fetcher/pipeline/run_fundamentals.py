@@ -140,8 +140,8 @@ class run_fundamentals:
                         print(f"Worker failed for {tick}: {exc}")
 
 
-test = run_fundamentals(test=False, n_test=500)
-test.run()
+# test = run_fundamentals(test=False, n_test=500)
+# test.run()
 
 def count_empty_parquet(root):
     empty = []
@@ -158,7 +158,7 @@ def count_parquet_files(root):
     return sum(1 for _ in Path(root).rglob("*.parquet"))
 
 # diagnostics
-if True: 
+if False: 
     dirs = os.listdir(".dev/data/bronze")
     empty_list = []
     for d in dirs: 
