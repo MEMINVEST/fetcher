@@ -16,8 +16,9 @@ import os
 
 
 class run_fundamentals:
-    def __init__(self, root=".dev/data", test=False, n_test=1000):
+    def __init__(self, root=".dev/data", test=False, n_test=1000, threads = 3):
         self.root = root
+        self.threads = threads
         blacklist_dir = Path(f"{root}/blacklist")
         blacklisted = set()
 
@@ -122,7 +123,7 @@ class run_fundamentals:
             open(self.blacklist_location, "w").close()
             open(self.silent_location, "w").close()
 
-            with ThreadPoolExecutor(max_workers=3) as executor:
+            with ThreadPoolExecutor(max_workers=self.threads) as executor:
                 future_to_ticker = {
                     executor.submit(self._run_one, tick): tick for tick in self.tickers
                 }
@@ -139,5 +140,29 @@ class run_fundamentals:
                         print(f"Worker failed for {tick}: {exc}")
 
 
-test = run_fundamentals(test=True, n_test=500)
+test = run_fundamentals(test=False, n_test=500)
 test.run()
+
+def count_empty_parquet(root):
+    empty = []
+    for p in Path(root).rglob("*.parquet"):
+        try:
+            if pl.read_parquet(p, n_rows=1).height == 0:
+                empty.append(p)
+        except Exception:
+            # skip unreadable/corrupt files
+            pass
+    return empty
+
+def count_parquet_files(root):
+    return sum(1 for _ in Path(root).rglob("*.parquet"))
+
+# diagnostics
+if True: 
+    dirs = os.listdir(".dev/data/bronze")
+    empty_list = []
+    for d in dirs: 
+        files = count_parquet_files(f".dev/data/bronze/{d}")
+        empty_files = count_empty_parquet(f".dev/data/bronze/{d}")
+        print(f"{d}: {len(empty_files)}/{files}")
+        empty_list.append(empty_files)

@@ -62,11 +62,12 @@ class fundamentals:
     def _handle_http_exceptions(self, fn):
         try:
             data = fn()
+        except yf.exceptions.YFRateLimitError:
+            raise
         except creq.exceptions.HTTPError as exc:
             status = exc.response.status_code if exc.response is not None else None
             print(f"Error Handling. Status: {status}")
-            if status == 404:
-                data = None
+            return None
 
         return data
 
@@ -79,12 +80,12 @@ class fundamentals:
             "value": pl.Float64,
         }
 
-        if obj.empty:
+        if obj is None:
             return pl.DataFrame(schema=schema).select(
                 "ticker", "timestamp", "item", "date", "value"
             )
 
-        if obj is None:
+        if obj.empty:
             return pl.DataFrame(schema=schema).select(
                 "ticker", "timestamp", "item", "date", "value"
             )
@@ -137,14 +138,15 @@ class fundamentals:
         return pl.DataFrame(metarows, schema=schema)
 
     def write(self):
+
         meta = self.metadata
         bs = self.balance_sheet_combined
         inc = self.income_statement_combined
         cf = self.cashflow_combined
-        ad = self._handle_http_exceptions(lambda: self.analyst_data) # this needs to be catched earlier
-        od = self._handle_http_exceptions(lambda: self.ownership_data) # here too
+        ad = self.analyst_data
+        od = self.ownership_data
 
-        if all(t.height == 0 for t in (meta, bs, inc, cf, ad, od)):
+        if all((t is None or t.height == 0) for t in (bs, inc, cf, ad, od)):
             raise SilentFail(f"{self.ticker} silently failed.")
         else:
             if meta is not None:
@@ -192,9 +194,16 @@ class fundamentals:
 
     @cached_property
     def balance_sheet_combined(self):
-        return self.balance_sheet.with_columns(pl.lit("yearly").alias("freq")).vstack(
+        bsc = self.balance_sheet.with_columns(pl.lit("yearly").alias("freq")).vstack(
             self.balance_sheet_quarterly.with_columns(pl.lit("quarterly").alias("freq"))
         )
+
+        if bsc.height == 0: 
+            return None
+    
+        return bsc
+
+
 
     @cached_property
     def income_statement(self):
@@ -214,13 +223,18 @@ class fundamentals:
 
     @cached_property
     def income_statement_combined(self):
-        return self.income_statement.with_columns(
+        incc = self.income_statement.with_columns(
             pl.lit("yearly").alias("freq")
         ).vstack(
             self.income_statement_quarterly.with_columns(
                 pl.lit("quarterly").alias("freq")
             )
         )
+
+        if incc.height == 0: 
+            return None
+        
+        return incc
 
     @cached_property
     def cashflow(self):
@@ -237,12 +251,16 @@ class fundamentals:
 
     @cached_property
     def cashflow_combined(self):
-        return self.cashflow.with_columns(pl.lit("yearly").alias("freq")).vstack(
+        cfc = self.cashflow.with_columns(pl.lit("yearly").alias("freq")).vstack(
             self.cashflow_quarterly.with_columns(pl.lit("quarterly").alias("freq"))
         )
 
-    def _analyst_data_df(self, df, source, schema_out):
-        # is_pd_df = isinstance(df, )
+        if cfc.height == 0: 
+            return None
+
+        return cfc
+
+    def _analyst_data_df(self, df, src, schema_out):
         if "period" in df.columns:
             data = pl.from_pandas(df).unpivot(
                 index="period", variable_name="item", value_name="value"
@@ -253,12 +271,12 @@ class fundamentals:
                 index="period", variable_name="item", value_name="value"
             )
         else:
-            print("Unknown format. None.")
-            return None
+            print("Unknown format. Returning empty polars df.")
+            return pl.DataFrame(schema=schema_out)
 
-        return data.with_columns(pl.lit(source).alias("source")).cast(schema_out)
+        return data.with_columns(pl.lit(src).alias("source")).cast(schema_out)
 
-    def _analyst_data_dict(self, dictionary, source, schema_out):
+    def _analyst_data_dict(self, dictionary, src, schema_out):
         schema = {
             "current": pl.Float64,
             "high": pl.Float64,
@@ -275,7 +293,7 @@ class fundamentals:
             pl.DataFrame(dictionary, schema=schema)
             .with_columns(pl.lit("0d").alias("period"))
             .unpivot(index="period", variable_name="item", value_name="value")
-            .with_columns(pl.lit(source).alias("source"))
+            .with_columns(pl.lit(src).alias("source"))
         )
 
         return data.cast(schema_out)
@@ -300,21 +318,28 @@ class fundamentals:
 
         fetched = []
         for t in tables:
-            attr = getattr(self._yf, t)
+            attr = self._handle_http_exceptions(lambda: getattr(self._yf, t))
+            if attr is None:
+                fetched.append(pl.DataFrame(schema = schema_out))
             if isinstance(attr, pd.core.frame.DataFrame):
                 fetched.append(
-                    self._analyst_data_df(attr, source=t, schema_out=schema_out)
+                    self._analyst_data_df(attr, src=t, schema_out=schema_out)
                 )
             elif isinstance(attr, dict):
                 fetched.append(
-                    self._analyst_data_dict(attr, source=t, schema_out=schema_out)
+                    self._analyst_data_dict(attr, src=t, schema_out=schema_out)
                 )
             else:
-                print(f"Unextpected class {type(attr)}.")
+                print(f"Unextpected class {type(attr)}. Returning empty polars df.")
+                fetched.append(pl.DataFrame(schema=schema_out))
 
-        data = pl.concat(fetched, how="vertical").with_columns(
-            pl.lit(self.ticker).alias("ticker"), pl.lit(self.ts).alias("timestamp")
-        )
+            data = pl.concat(fetched, how="vertical").with_columns(
+                pl.lit(self.ticker).alias("ticker"), pl.lit(self.ts).alias("timestamp")
+            )
+
+        # convert to none if completely empty to avoid write
+        if data.height == 0: 
+            return None
 
         return data
 
@@ -326,7 +351,7 @@ class fundamentals:
             "value": pl.Float64,
         }
 
-        major_holders_pd = self._yf.major_holders
+        major_holders_pd = self._handle_http_exceptions(lambda: self._yf.major_holders)
 
         if major_holders_pd is None:
             major_holders = pl.DataFrame(schema=schema)
@@ -339,7 +364,7 @@ class fundamentals:
                 .cast(schema)
             )
 
-        insider_pd = self._yf.insider_purchases
+        insider_pd = self._handle_http_exceptions(lambda: self._yf.insider_purchases)
 
         if insider_pd is None:
             insider = pl.DataFrame(schema=schema)
@@ -357,8 +382,7 @@ class fundamentals:
             pl.lit(self.ticker).alias("ticker"), pl.lit(self.ts).alias("timestamp")
         )
 
-        return data
+        if data.height == 0: 
+            return None
 
-# Worker failed for 0HV.MU: cannot access local variable 'data' where it is not associated with a value
-# test = fundamentals(ticker="0HV.MU")
-# test.write()
+        return data
