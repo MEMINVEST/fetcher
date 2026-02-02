@@ -12,73 +12,66 @@ from functools import cached_property
 
 yf.config.debug.hide_exceptions = False
 
+
 class SilentFail(Exception):
     pass
+
 
 class FakeResp:
     status_code = 429
 
+
 class FakeTicker:
     @property
     def info(self):
-        raise creq.exceptions.HTTPError(msg = "BULLSHIT", response=FakeResp())
+        raise creq.exceptions.HTTPError(msg="BULLSHIT", response=FakeResp())
 
     @property
     def balance_sheet(self):
-        raise creq.exceptions.HTTPError(msg = "BULLSHIT", response=FakeResp())
+        raise creq.exceptions.HTTPError(msg="BULLSHIT", response=FakeResp())
 
     @property
     def cashflow(self):
         raise creq.exceptions.HTTPError(response=FakeResp())
-    
+
+
 class fundamentals:
     def __init__(self, ticker, bronze_path=".dev/data/bronze"):
-
         self.bronze_path = bronze_path
         self._yf = yf.Ticker(ticker)
         self.fake = FakeTicker()
         info = self._yf.info
-    
-        if info is not None: 
+        isin = self._yf.isin
+        if isin is None:
+            isin = ""
+
+        self.isin = isin
+
+        if info is not None:
             self.info = info
-        else: 
-            self.info = None            
-                
+        else:
+            self.info = None
+
         self.ts = pd.Timestamp.now()
         self.ts_path = str(self.ts).replace(" ", "_").replace(":", "").replace(".", "")
         self.ticker = ticker
 
-    def _add_to_blacklist(self): 
+    def _add_to_blacklist(self):
         with open(self.blacklist, "a") as f:
             f.write(f"{self.ticker}\n")
-        
 
     def _handle_http_exceptions(self, fn):
-        # for w in self.exp_rl_wait: 
-        #     try:
-        data = fn()
+        try:
+            data = fn()
+        except yf.exceptions.YFRateLimitError:
+            raise
+        except creq.exceptions.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            print(f"Error Handling. Status: {status}")
+            return None
+
         return data
-        #     except creq.exceptions.Timeout:
-        #         print(f"Timeout for {self.ticker}. Retrying in {w}s")
-        #         time.sleep(w)
-        #         continue
-        #     except creq.exceptions.HTTPError as exc:
-        #         status = exc.response.status_code if exc.response is not None else None
-        #         print(f"Error Handling. Status: {status}")
-        #         if status == 404:
-        #             print(f"Invalid ticker: {self.ticker}")
-        #             return data
-        #         if status == 429:
-        #             print(f"Rate limited. Waiting {w} seconds before retry.")
-        #             time.sleep(w)
-        #             continue
-        #         if status in (0, None): 
-        #             print(f"Status 0, retry after {w} seconds.")
-        #             time.sleep(w)
-        #             continue
-                    
-        # raise creq.exceptions.HTTPError("Rate limited after retries or connection lost.")
-                        
+
     def __get_tabular(self, obj, ts, ticker):
         schema = {
             "ticker": pl.String,
@@ -88,16 +81,16 @@ class fundamentals:
             "value": pl.Float64,
         }
 
+        if obj is None:
+            return pl.DataFrame(schema=schema).select(
+                "ticker", "timestamp", "item", "date", "value"
+            )
+
         if obj.empty:
             return pl.DataFrame(schema=schema).select(
                 "ticker", "timestamp", "item", "date", "value"
             )
-        
-        if obj is None: 
-            return pl.DataFrame(schema=schema).select(
-                "ticker", "timestamp", "item", "date", "value"
-            )
-        
+
         table = (
             pl.from_pandas(obj, include_index=True)
             .rename({"None": "item"})
@@ -124,6 +117,7 @@ class fundamentals:
             "currency": pl.Utf8,
             "exchange": pl.Utf8,
             "sharesOutstanding": pl.Int64,
+            "isin": pl.Utf8,
             "floatShares": pl.Int64,
             "sharesShort": pl.Int64,
             "fullTimeEmployees": pl.Int64,
@@ -138,12 +132,15 @@ class fundamentals:
             "mostRecentQuarter": pl.Date,
         }
 
-        if obj is None: 
+        if obj is None:
             return pl.DataFrame(schema=schema)
-       
+
         metarows = {}
         for f in schema.keys():
-            metarows[f] = obj.get(f)
+            if f == "isin":
+                metarows[f] = self.isin
+            else:
+                metarows[f] = obj.get(f)
 
         if all(not v for v in metarows.values()):
             return pl.DataFrame(schema=schema)
@@ -158,90 +155,103 @@ class fundamentals:
         return pl.DataFrame(metarows, schema=schema)
 
     def write(self):
-        # if self.is404: 
-        #     # here we can write to blacklist!
-        #     print(f"Invalid ticker: {self.ticker}")
-        #     self._add_to_blacklist()
-        #     return None
 
         meta = self.metadata
         bs = self.balance_sheet_combined
         inc = self.income_statement_combined
         cf = self.cashflow_combined
+        ad = self.analyst_data
+        od = self.ownership_data
 
-        if all(t.height == 0 for t in (meta, bs, inc, cf)):
+        if all((t is None or t.height == 0) for t in (bs, inc, cf, ad, od)):
             raise SilentFail(f"{self.ticker} silently failed.")
-        else: 
-            meta.write_parquet(
-                f"{self.bronze_path}/metadata/{self.ticker}{self.ts_path}.parquet"
-            )
-            bs.write_parquet(
-                f"{self.bronze_path}/balance_sheet/{self.ticker}{self.ts_path}.parquet"
-            )
-            inc.write_parquet(
-                f"{self.bronze_path}/income_statement/{self.ticker}{self.ts_path}.parquet"
-            )
-            cf.write_parquet(
-                f"{self.bronze_path}/cashflow_statement/{self.ticker}{self.ts_path}.parquet"
-            )
+        else:
+            if meta is not None:
+                meta.write_parquet(
+                    f"{self.bronze_path}/metadata/{self.ticker}{self.ts_path}.parquet"
+                )
+            if bs is not None:
+                bs.write_parquet(
+                    f"{self.bronze_path}/balance_sheet/{self.ticker}{self.ts_path}.parquet"
+                )
+            if inc is not None:
+                inc.write_parquet(
+                    f"{self.bronze_path}/income_statement/{self.ticker}{self.ts_path}.parquet"
+                )
+            if cf is not None:
+                cf.write_parquet(
+                    f"{self.bronze_path}/cashflow_statement/{self.ticker}{self.ts_path}.parquet"
+                )
+            if ad is not None:
+                ad.write_parquet(
+                    f"{self.bronze_path}/analyst_data/{self.ticker}{self.ts_path}.parquet"
+                )
+            if od is not None:
+                od.write_parquet(
+                    f"{self.bronze_path}/ownership_data/{self.ticker}{self.ts_path}.parquet"
+                )
 
     @cached_property
     def metadata(self):
         return self.__get_meta(obj=self.info, ts=self.ts, ticker=self.ticker)
-            
+
     @cached_property
     def balance_sheet(self):
 
         bs = self._handle_http_exceptions(lambda: self._yf.balance_sheet)
 
-        #bs = self._handle_http_exceptions(lambda: self.fake.balance_sheet) # for debugging 429 responses
-                    
-        return self.__get_tabular(
-            obj=bs, ts=self.ts, ticker=self.ticker
-        )
+        return self.__get_tabular(obj=bs, ts=self.ts, ticker=self.ticker)
 
     @cached_property
     def balance_sheet_quarterly(self):
 
         bs = self._handle_http_exceptions(lambda: self._yf.quarterly_balance_sheet)
 
-        return self.__get_tabular(
-            obj=bs, ts=self.ts, ticker=self.ticker
-        )
+        return self.__get_tabular(obj=bs, ts=self.ts, ticker=self.ticker)
 
     @cached_property
     def balance_sheet_combined(self):
-        return self.balance_sheet.with_columns(pl.lit("yearly").alias("freq")).vstack(
+        bsc = self.balance_sheet.with_columns(pl.lit("yearly").alias("freq")).vstack(
             self.balance_sheet_quarterly.with_columns(pl.lit("quarterly").alias("freq"))
         )
+
+        if bsc.height == 0: 
+            return None
+    
+        return bsc
+
+
 
     @cached_property
     def income_statement(self):
 
         inc = self._handle_http_exceptions(lambda: self._yf.income_stmt)
 
-        return self.__get_tabular(
-            obj=inc, ts=self.ts, ticker=self.ticker
-        )
+        return self.__get_tabular(obj=inc, ts=self.ts, ticker=self.ticker)
 
     @cached_property
     def income_statement_quarterly(self):
 
-        inc = self._handle_http_exceptions(lambda: self._yf.quarterly_income_stmt,)
-
-        return self.__get_tabular(
-            obj=inc, ts=self.ts, ticker=self.ticker
+        inc = self._handle_http_exceptions(
+            lambda: self._yf.quarterly_income_stmt,
         )
+
+        return self.__get_tabular(obj=inc, ts=self.ts, ticker=self.ticker)
 
     @cached_property
     def income_statement_combined(self):
-        return self.income_statement.with_columns(
+        incc = self.income_statement.with_columns(
             pl.lit("yearly").alias("freq")
         ).vstack(
             self.income_statement_quarterly.with_columns(
                 pl.lit("quarterly").alias("freq")
             )
         )
+
+        if incc.height == 0: 
+            return None
+        
+        return incc
 
     @cached_property
     def cashflow(self):
@@ -254,13 +264,142 @@ class fundamentals:
     def cashflow_quarterly(self):
 
         cf = self._handle_http_exceptions(lambda: self._yf.quarterly_cashflow)
-        return self.__get_tabular(
-            obj=cf, ts=self.ts, ticker=self.ticker
-        )
+        return self.__get_tabular(obj=cf, ts=self.ts, ticker=self.ticker)
 
     @cached_property
     def cashflow_combined(self):
-        return self.cashflow.with_columns(pl.lit("yearly").alias("freq")).vstack(
+        cfc = self.cashflow.with_columns(pl.lit("yearly").alias("freq")).vstack(
             self.cashflow_quarterly.with_columns(pl.lit("quarterly").alias("freq"))
         )
-    
+
+        if cfc.height == 0: 
+            return None
+
+        return cfc
+
+    def _analyst_data_df(self, df, src, schema_out):
+        if "period" in df.columns:
+            data = pl.from_pandas(df).unpivot(
+                index="period", variable_name="item", value_name="value"
+            )
+        elif df.index.name == "period":
+            df = df.reset_index().rename(columns={"index": "period"})
+            data = pl.from_pandas(df).unpivot(
+                index="period", variable_name="item", value_name="value"
+            )
+        else:
+            print("Unknown format. Returning empty polars df.")
+            return pl.DataFrame(schema=schema_out)
+
+        return data.with_columns(pl.lit(src).alias("source")).cast(schema_out)
+
+    def _analyst_data_dict(self, dictionary, src, schema_out):
+        schema = {
+            "current": pl.Float64,
+            "high": pl.Float64,
+            "low": pl.Float64,
+            "mean": pl.Float64,
+            "median": pl.Float64,
+        }
+
+        for s in schema.keys():
+            if s not in dictionary.keys():
+                dictionary[s] = None
+
+        data = (
+            pl.DataFrame(dictionary, schema=schema)
+            .with_columns(pl.lit("0d").alias("period"))
+            .unpivot(index="period", variable_name="item", value_name="value")
+            .with_columns(pl.lit(src).alias("source"))
+        )
+
+        return data.cast(schema_out)
+
+    @cached_property
+    def analyst_data(self):
+        tables = {
+            "recommendations",
+            "analyst_price_targets",
+            "earnings_estimate",
+            "revenue_estimate",
+            "growth_estimates",
+            "eps_revisions",
+        }
+
+        schema_out = {
+            "period": pl.String,
+            "item": pl.String,
+            "value": pl.Float64,
+            "source": pl.String,
+        }
+
+        fetched = []
+        for t in tables:
+            attr = self._handle_http_exceptions(lambda: getattr(self._yf, t))
+            if attr is None:
+                fetched.append(pl.DataFrame(schema = schema_out))
+            if isinstance(attr, pd.core.frame.DataFrame):
+                fetched.append(
+                    self._analyst_data_df(attr, src=t, schema_out=schema_out)
+                )
+            elif isinstance(attr, dict):
+                fetched.append(
+                    self._analyst_data_dict(attr, src=t, schema_out=schema_out)
+                )
+            else:
+                print(f"Unextpected class {type(attr)}. Returning empty polars df.")
+                fetched.append(pl.DataFrame(schema=schema_out))
+
+            data = pl.concat(fetched, how="vertical").with_columns(
+                pl.lit(self.ticker).alias("ticker"), pl.lit(self.ts).alias("timestamp")
+            )
+
+        # convert to none if completely empty to avoid write
+        if data.height == 0: 
+            return None
+
+        return data
+
+    @cached_property
+    def ownership_data(self):
+        schema = {
+            "item": pl.String,
+            "measure": pl.String,
+            "value": pl.Float64,
+        }
+
+        major_holders_pd = self._handle_http_exceptions(lambda: self._yf.major_holders)
+
+        if major_holders_pd is None:
+            major_holders = pl.DataFrame(schema=schema)
+        elif major_holders_pd.empty:
+            major_holders = pl.DataFrame(schema=schema)
+        else:
+            major_holders = (
+                pl.DataFrame(major_holders_pd.reset_index(names="item")).with_columns(pl.lit(None).alias("measure"))
+                .rename({"Value": "value"})
+                .cast(schema)
+            )
+
+        insider_pd = self._handle_http_exceptions(lambda: self._yf.insider_purchases)
+
+        if insider_pd is None:
+            insider = pl.DataFrame(schema=schema)
+        elif insider_pd.empty:
+            insider = pl.DataFrame(schema=schema)
+        else:
+            insider_raw = pl.DataFrame(insider_pd)
+            insider = (
+                insider_raw.rename({insider_raw.columns[0]: "item"})
+                .unpivot(index="item", variable_name="measure", value_name="value")
+                .cast(schema)
+            )
+
+        data = pl.concat([major_holders, insider], how="diagonal").with_columns(
+            pl.lit(self.ticker).alias("ticker"), pl.lit(self.ts).alias("timestamp")
+        )
+
+        if data.height == 0: 
+            return None
+
+        return data

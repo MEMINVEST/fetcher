@@ -8,8 +8,9 @@ yf.config.debug.hide_exceptions = False
 
 pd.set_option("future.no_silent_downcasting", True)
 
+
 class daily_data:
-    def __init__(self, ticker, bronze_path = ".dev/data/bronze"):
+    def __init__(self, ticker, bronze_path=".dev/data/bronze"):
         self.bronze_path = bronze_path
         self._yf = yf.Ticker(ticker)
         self.ts = pd.Timestamp.now()
@@ -19,15 +20,19 @@ class daily_data:
         self.init_history = not any(ticker in bf for bf in base_files)
 
     def initialize_history(self):
-        return self._yf.history(period="50y", interval="1d", auto_adjust = False)
+        return self._yf.history(period="50y", interval="1d", auto_adjust=False)
 
     def download_latest(self):
-        return self._yf.history(period="5d", interval="1d", auto_adjust = False)
+        return self._yf.history(period="5d", interval="1d", auto_adjust=False)
 
     def get_daily(self):
 
         if self.init_history:
-            data = self.initialize_history().replace("Infinity", float("inf")).replace("-Infinity", float("-inf"))
+            data = (
+                self.initialize_history()
+                .replace("Infinity", float("inf"))
+                .replace("-Infinity", float("-inf"))
+            )
         else:
             data = self.download_latest()
 
@@ -79,7 +84,11 @@ class daily_data:
             "Volume": pl.Float64,
         }
 
-        data = self._yf.history(period="5d", interval="1m").replace("Infinity", float("inf")).replace("-Infinity", float("-inf"))
+        data = (
+            self._yf.history(period="5d", interval="1m")
+            .replace("Infinity", float("inf"))
+            .replace("-Infinity", float("-inf"))
+        )
 
         table = (
             pl.from_pandas(data, include_index=True)
@@ -122,4 +131,3 @@ class daily_data:
         )
 
         return None
-    
