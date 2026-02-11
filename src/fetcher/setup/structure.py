@@ -11,8 +11,7 @@ def create_bronze(path=".dev/data/bronze"):
             "balance_sheet",
             "income_statement",
             "cashflow_statement",
-            "daily_data/base",
-            "daily_data/update",
+            "daily_data",
             "intraday",
             "analyst_data",
             "ownership_data",
@@ -25,9 +24,12 @@ def clean_dir(root=".dev/data/bronze"):
     root_path = Path(root)
     if not root_path.exists():
         return
-    for path in root_path.rglob("*"):
+    # Remove files and subfolders under root, but keep root and its immediate subfolders.
+    for path in sorted(root_path.rglob("*"), reverse=True):
         if path.is_file() or path.is_symlink():
             path.unlink()
+        elif path.is_dir() and path.parent != root_path:
+            path.rmdir()
 
 
 def create_dir(path):

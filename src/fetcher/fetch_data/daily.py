@@ -16,8 +16,18 @@ class daily_data:
         self.ts = pd.Timestamp.now()
         self.ts_path = str(self.ts).replace(" ", "_").replace(":", "").replace(".", "")
         self.ticker = ticker
-        base_files = os.listdir(f"{bronze_path}/daily_data/base")
-        self.init_history = not any(ticker in bf for bf in base_files)
+        self._make_bronze_folder(ticker = ticker, path = bronze_path)
+        base_files = os.listdir(f"{bronze_path}/daily_data/{ticker}/base")
+        self.init_history = len(base_files) == 0
+
+    @staticmethod
+    def _make_bronze_folder(ticker, path):
+        base_path = f"{path}/daily_data/{ticker}"
+        if not os.path.isdir(base_path): 
+            os.mkdir(base_path)
+            os.mkdir(f"{base_path}/base")
+            os.mkdir(f"{base_path}/update")
+        return None
 
     def initialize_history(self):
         return self._yf.history(period="50y", interval="1d", auto_adjust=False)
@@ -71,63 +81,16 @@ class daily_data:
         )
         return table
 
-    def get_intraday(self):
-
-        schema = {
-            "ticker": pl.Utf8,
-            "timestamp": pl.Datetime("ns"),
-            "datetime": pl.Datetime("ns"),
-            "Open": pl.Float64,
-            "High": pl.Float64,
-            "Low": pl.Float64,
-            "Close": pl.Float64,
-            "Volume": pl.Float64,
-        }
-
-        data = (
-            self._yf.history(period="5d", interval="1m")
-            .replace("Infinity", float("inf"))
-            .replace("-Infinity", float("-inf"))
-        )
-
-        table = (
-            pl.from_pandas(data, include_index=True)
-            .rename({"Datetime": "datetime"})
-            .with_columns(
-                pl.lit(self.ticker).alias("ticker"), pl.lit(self.ts).alias("timestamp")
-            )
-            .cast(schema, strict=False)
-            .select(
-                "ticker",
-                "timestamp",
-                "datetime",
-                "Open",
-                "High",
-                "Low",
-                "Close",
-                "Volume",
-            )
-        )
-        return table
-
     def store_daily(self):
         if self.init_history:
             data = self.get_daily()
             data.write_parquet(
-                f"{self.bronze_path}/daily_data/base/{self.ticker}_base{self.ts_path}.parquet"
+                f"{self.bronze_path}/daily_data/{self.ticker}/base/base_{self.ts_path}.parquet"
             )
         else:
             data = self.get_daily()
             data.write_parquet(
-                f"{self.bronze_path}/daily_data/update/{self.ticker}_{self.ts_path}.parquet"
+                f"{self.bronze_path}/daily_data/{self.ticker}/update/update_{self.ts_path}.parquet"
             )
-
-        return None
-
-    def store_intraday(self):
-        data = self.get_intraday()
-        data.write_parquet(
-            f"{self.bronze_path}/intraday/{self.ticker}_{self.ts_path}.parquet"
-        )
 
         return None

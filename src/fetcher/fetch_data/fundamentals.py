@@ -54,7 +54,14 @@ class fundamentals:
 
         self.ts = pd.Timestamp.now()
         self.ts_path = str(self.ts).replace(" ", "_").replace(":", "").replace(".", "")
-        self.ticker = ticker
+        self.ticker = ticker 
+
+    @staticmethod
+    def _make_bronze_folder(ticker, path, folder):
+        base_path = f"{path}/{folder}/{ticker}"
+        if not os.path.isdir(base_path): 
+            os.mkdir(base_path)
+        return None
 
     def _add_to_blacklist(self):
         with open(self.blacklist, "a") as f:
@@ -167,28 +174,34 @@ class fundamentals:
             raise SilentFail(f"{self.ticker} silently failed.")
         else:
             if meta is not None:
+                self._make_bronze_folder(ticker = self.ticker, path = self.bronze_path, folder = "metadata")
                 meta.write_parquet(
-                    f"{self.bronze_path}/metadata/{self.ticker}{self.ts_path}.parquet"
+                    f"{self.bronze_path}/metadata/{self.ticker}/{self.ts_path}.parquet"
                 )
             if bs is not None:
+                self._make_bronze_folder(ticker = self.ticker, path = self.bronze_path, folder = "balance_sheet")
                 bs.write_parquet(
-                    f"{self.bronze_path}/balance_sheet/{self.ticker}{self.ts_path}.parquet"
+                    f"{self.bronze_path}/balance_sheet/{self.ticker}/{self.ts_path}.parquet"
                 )
             if inc is not None:
+                self._make_bronze_folder(ticker = self.ticker, path = self.bronze_path, folder = "income_statement")    
                 inc.write_parquet(
-                    f"{self.bronze_path}/income_statement/{self.ticker}{self.ts_path}.parquet"
+                    f"{self.bronze_path}/income_statement/{self.ticker}/{self.ts_path}.parquet"
                 )
             if cf is not None:
+                self._make_bronze_folder(ticker = self.ticker, path = self.bronze_path, folder = "cashflow_statement") 
                 cf.write_parquet(
-                    f"{self.bronze_path}/cashflow_statement/{self.ticker}{self.ts_path}.parquet"
+                    f"{self.bronze_path}/cashflow_statement/{self.ticker}/{self.ts_path}.parquet"
                 )
             if ad is not None:
+                self._make_bronze_folder(ticker = self.ticker, path = self.bronze_path, folder = "analyst_data")                
                 ad.write_parquet(
-                    f"{self.bronze_path}/analyst_data/{self.ticker}{self.ts_path}.parquet"
+                    f"{self.bronze_path}/analyst_data/{self.ticker}/{self.ts_path}.parquet"
                 )
             if od is not None:
+                self._make_bronze_folder(ticker = self.ticker, path = self.bronze_path, folder = "ownership_data")
                 od.write_parquet(
-                    f"{self.bronze_path}/ownership_data/{self.ticker}{self.ts_path}.parquet"
+                    f"{self.bronze_path}/ownership_data/{self.ticker}/{self.ts_path}.parquet"
                 )
 
     @cached_property

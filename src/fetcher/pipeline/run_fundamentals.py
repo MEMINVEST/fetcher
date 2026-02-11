@@ -140,8 +140,8 @@ class run_fundamentals:
                         print(f"Worker failed for {tick}: {exc}")
 
 
-# test = run_fundamentals(test=False, n_test=500)
-# test.run()
+test = run_fundamentals(test=True, n_test=100)
+test.run()
 
 def count_empty_parquet(root):
     empty = []

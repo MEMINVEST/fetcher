@@ -129,3 +129,20 @@ class run_daily:
                     except Exception as exc:
                         tick = future_to_ticker[fut]
                         print(f"Worker failed for {tick}: {exc}")
+        
+        # cleanup of empty directories
+        # list directories 
+        dirs = [Path(f"{self.root}/bronze/daily_data/{d}") for d in os.listdir(f"{self.root}/bronze/daily_data")]
+        # delete if empty
+        for d in dirs: 
+            if d.is_dir(): 
+                has_file = any(sd.is_file() for sd in d.rglob("*"))
+                if not has_file:
+                    print(f"delete empty path {d}")
+                    for sd in sorted(d.rglob("*"), reverse=True):
+                        if sd.is_dir():
+                            sd.rmdir()
+                    d.rmdir()
+
+
+run_daily().run()
