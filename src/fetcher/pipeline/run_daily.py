@@ -145,4 +145,3 @@ class run_daily:
                     d.rmdir()
 
 
-run_daily().run()
