@@ -1,12 +1,14 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 
-def create_bronze(path=".dev/data/bronze"):
-    path = Path(path)
-    if path.exists() and path.is_dir():
+def create_bronze(path: str = ".dev/data/bronze") -> None:
+    bronze_path: Path = Path(path)
+    if bronze_path.exists() and bronze_path.is_dir():
         print("Directory exists")
     else:
-        subdirs = [
+        subdirs: list[str] = [
             "metadata",
             "balance_sheet",
             "income_statement",
@@ -17,10 +19,10 @@ def create_bronze(path=".dev/data/bronze"):
             "ownership_data",
         ]
         for s in subdirs:
-            (path / s).mkdir(parents=True, exist_ok=True)
+            (bronze_path / s).mkdir(parents=True, exist_ok=True)
 
 
-def clean_dir(root=".dev/data/bronze"):
+def clean_dir(root: str = ".dev/data/bronze") -> None:
     root_path = Path(root)
     if not root_path.exists():
         return
@@ -32,15 +34,15 @@ def clean_dir(root=".dev/data/bronze"):
             path.rmdir()
 
 
-def create_dir(path):
-    path = Path(path)
-    if path.exists() and path.is_dir():
+def create_dir(path: str) -> None:
+    dir_path: Path = Path(path)
+    if dir_path.exists() and dir_path.is_dir():
         print("Directory exists")
     else:
-        path.mkdir()
+        dir_path.mkdir()
 
 
-def create_data(root=".dev/data"):
+def create_data(root: str = ".dev/data") -> None:
     create_bronze(path=f"{root}/bronze")
     create_dir(path=f"{root}/silver")
     create_dir(path=f"{root}/gold")

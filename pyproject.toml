@@ -35,6 +35,11 @@ include = ["fetcher*"]
 [tool.black]
 target-version = ["py313"]
 
+[dependency-groups]
+dev = [
+    "ty>=0.0.23",
+]
+
 
 
 

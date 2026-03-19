@@ -1,8 +1,11 @@
-import yfinance as yf
+from __future__ import annotations
+
+import os
+from typing import Any
+
 import pandas as pd
 import polars as pl
-import os
-import curl_cffi.requests as creq
+import yfinance as yf
 
 yf.config.debug.hide_exceptions = False
 
@@ -10,32 +13,34 @@ pd.set_option("future.no_silent_downcasting", True)
 
 
 class daily_data:
-    def __init__(self, ticker, bronze_path=".dev/data/bronze"):
-        self.bronze_path = bronze_path
-        self._yf = yf.Ticker(ticker)
-        self.ts = pd.Timestamp.now()
-        self.ts_path = str(self.ts).replace(" ", "_").replace(":", "").replace(".", "")
-        self.ticker = ticker
-        self._make_bronze_folder(ticker = ticker, path = bronze_path)
-        base_files = os.listdir(f"{bronze_path}/daily_data/{ticker}/base")
-        self.init_history = len(base_files) == 0
+    def __init__(self, ticker: str, bronze_path: str = ".dev/data/bronze") -> None:
+        self.bronze_path: str = bronze_path
+        self._yf: Any = yf.Ticker(ticker)
+        self.ts: pd.Timestamp = pd.Timestamp.now()
+        self.ts_path: str = (
+            str(self.ts).replace(" ", "_").replace(":", "").replace(".", "")
+        )
+        self.ticker: str = ticker
+        self._make_bronze_folder(ticker=ticker, path=bronze_path)
+        base_files: list[str] = os.listdir(f"{bronze_path}/daily_data/{ticker}/base")
+        self.init_history: bool = len(base_files) == 0
 
     @staticmethod
-    def _make_bronze_folder(ticker, path):
-        base_path = f"{path}/daily_data/{ticker}"
-        if not os.path.isdir(base_path): 
+    def _make_bronze_folder(ticker: str, path: str) -> None:
+        base_path: str = f"{path}/daily_data/{ticker}"
+        if not os.path.isdir(base_path):
             os.mkdir(base_path)
             os.mkdir(f"{base_path}/base")
             os.mkdir(f"{base_path}/update")
-        return None
 
-    def initialize_history(self):
+    def initialize_history(self) -> pd.DataFrame:
         return self._yf.history(period="50y", interval="1d", auto_adjust=False)
 
-    def download_latest(self):
+    def download_latest(self) -> pd.DataFrame:
         return self._yf.history(period="5d", interval="1d", auto_adjust=False)
 
-    def get_daily(self):
+    def get_daily(self) -> pl.DataFrame:
+        data: pd.DataFrame
 
         if self.init_history:
             data = (
@@ -46,20 +51,22 @@ class daily_data:
         else:
             data = self.download_latest()
 
-        schema = {
-            "ticker": pl.Utf8,
-            "timestamp": pl.Datetime("ns"),
-            "date": pl.Date,
-            "Open": pl.Float64,
-            "High": pl.Float64,
-            "Low": pl.Float64,
-            "Close": pl.Float64,
-            "Volume": pl.Float64,
-            "Dividends": pl.Float64,
-            "Stock Splits": pl.Float64,
-        }
+        schema: pl.Schema = pl.Schema(
+            {
+                "ticker": pl.Utf8,
+                "timestamp": pl.Datetime("ns"),
+                "date": pl.Date,
+                "Open": pl.Float64,
+                "High": pl.Float64,
+                "Low": pl.Float64,
+                "Close": pl.Float64,
+                "Volume": pl.Float64,
+                "Dividends": pl.Float64,
+                "Stock Splits": pl.Float64,
+            }
+        )
 
-        table = (
+        table: pl.DataFrame = (
             pl.from_pandas(data, include_index=True)
             .rename({"Date": "date"})
             .with_columns(
@@ -81,16 +88,13 @@ class daily_data:
         )
         return table
 
-    def store_daily(self):
+    def store_daily(self) -> None:
+        data: pl.DataFrame = self.get_daily()
         if self.init_history:
-            data = self.get_daily()
             data.write_parquet(
                 f"{self.bronze_path}/daily_data/{self.ticker}/base/base_{self.ts_path}.parquet"
             )
         else:
-            data = self.get_daily()
             data.write_parquet(
                 f"{self.bronze_path}/daily_data/{self.ticker}/update/update_{self.ts_path}.parquet"
             )
-
-        return None
